@@ -9,8 +9,27 @@ fetch("travelRecommendation_api.json")
   .then((response) => response.json())
   .then((data) => {
     result = data;
+    console.log(result);
   })
   .catch((error) => console.error("Error loading data:", error));
+
+function normalizeKeyword(keyword) {
+  const normalizedKeyword = keyword.toLowerCase().trim();
+  if (normalizedKeyword === "beach" || normalizedKeyword === "beaches") {
+    return "beach";
+  } else if (
+    normalizedKeyword === "temple" ||
+    normalizedKeyword === "temples"
+  ) {
+    return "temple";
+  } else if (
+    normalizedKeyword === "country" ||
+    normalizedKeyword === "countries"
+  ) {
+    return "country";
+  }
+  return normalizedKeyword;
+}
 
 function handleSearch() {
   const keywords = searchInput.value.trim().toLowerCase().split(/\s+/);
@@ -22,34 +41,72 @@ function handleSearch() {
 
   searchResults.style.display = "block";
 
-  const allResults = [
-    ...searchItems(result.temples, keywords),
-    ...searchItems(result.beaches, keywords),
-    ...searchCountries(result.countries, keywords),
-  ];
+  const allResults = new Set();
+  keywords.forEach((keyword) => {
+    const normalizedKeyword = normalizeKeyword(keyword);
 
-  if (allResults.length === 0) {
+    if (normalizedKeyword === "beach") {
+      searchItems(result.beaches, normalizedKeyword).forEach((item) =>
+        allResults.add(item)
+      );
+      result.beaches.forEach((item) => allResults.add(item));
+    } else if (normalizedKeyword === "temple") {
+      searchItems(result.temples, normalizedKeyword).forEach((item) =>
+        allResults.add(item)
+      );
+      result.temples.forEach((item) => allResults.add(item));
+    } else if (normalizedKeyword === "country") {
+      searchCountries(result.countries, normalizedKeyword).forEach((item) =>
+        allResults.add(item)
+      );
+      result.countries.forEach((country) => {
+        country.cities.forEach((city) => allResults.add(city));
+      });
+    } else {
+      searchAllItems(result.beaches, keyword).forEach((item) =>
+        allResults.add(item)
+      );
+      searchAllItems(result.temples, keyword).forEach((item) =>
+        allResults.add(item)
+      );
+      searchAllItems(
+        result.countries.flatMap((country) => country.cities),
+        keyword
+      ).forEach((item) => allResults.add(item));
+    }
+  });
+
+  if (allResults.size === 0) {
     searchResults.innerHTML = "<p>No results found.</p>";
   } else {
-    displayResults(allResults);
+    displayResults(Array.from(allResults));
   }
 }
 
-function searchItems(array, keywords) {
+function searchItems(array, keyword) {
   return array.filter((item) => {
     const combinedText = `${item.name} ${item.description}`.toLowerCase();
-    return keywords.some((keyword) => combinedText.includes(keyword));
+    return combinedText.includes(keyword.toLowerCase());
   });
 }
 
-function searchCountries(countries, keywords) {
+function searchAllItems(array, keyword) {
+  return array.filter((item) => {
+    const combinedText = `${item.name} ${item.description}`.toLowerCase();
+    return combinedText.includes(keyword.toLowerCase());
+  });
+}
+
+function searchCountries(countries, keyword) {
   return countries
     .map((country) => {
-      const countryMatch = keywords.some((keyword) =>
-        country.name.toLowerCase().includes(keyword)
-      );
+      const countryMatch = country.name
+        .toLowerCase()
+        .includes(keyword.toLowerCase());
 
-      const matchingCities = searchItems(country.cities, keywords);
+      const matchingCities = country.cities.filter((city) =>
+        city.name.toLowerCase().includes(keyword.toLowerCase())
+      );
 
       if (countryMatch || matchingCities.length > 0) {
         return {
@@ -95,7 +152,7 @@ function displayResults(results) {
       const itemName = document.createElement("h2");
       itemName.textContent = item.name;
       const itemImage = document.createElement("img");
-      itemImage.src = city.imageUrl;
+      itemImage.src = item.imageUrl;
       itemImage.classList.add("item-image");
       const itemDescription = document.createElement("p");
       itemDescription.textContent = item.description;
@@ -114,6 +171,3 @@ function handleReset() {
   searchResults.style.display = "none";
   searchResults.innerHTML = "";
 }
-
-searchButton.addEventListener("click", handleSearch);
-resetButton.addEventListener("click", handleReset);
